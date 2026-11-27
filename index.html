@@ -1343,7 +1343,7 @@ function rpCur(){ return TICKMODE ? RP.t : N-1; }
 function rpMax(){ return TICKMODE ? NT-1 : NA-1; }
 function rpMin(){ return TICKMODE ? rpFirstTick(1) : 1; }
 function rpRestore(){
-  if(RP.part){ var q=RP.part; D.highs[q.k]=q.h; D.lows[q.k]=q.l; D.prices[q.k]=q.c; RP.part=null; }
+  if(RP.part){ var q=RP.part; D.highs[q.k]=q.h; D.lows[q.k]=q.l; D.prices[q.k]=q.c; rpIndRestore(q.k); RP.part=null; }
 }
 function rpSetTick(t){
   t=Math.max(rpMin(),Math.min(NT-1,t));
@@ -1352,7 +1352,7 @@ function rpSetTick(t){
   for(var j=j0;j<=t;j++){ var v=RAWP[j]; if(v>h)h=v; if(v<l)l=v; }
   RP.part={k:k,h:D.highs[k],l:D.lows[k],c:D.prices[k]};
   D.highs[k]=h; D.lows[k]=l; D.prices[k]=RAWP[t];
-  RP.t=t;
+  RP.t=t; rpInd(k);
   setN(k+1);
   var sp=view.e-view.s; view.e=N-1+8; view.s=view.e-sp; clamp();
   hover=null; render();
@@ -1514,7 +1514,11 @@ function vCE(P,period,mult){
 }
 /* Recalcule une série avec ses paramètres actuels, sur la vue affichée (bougies ou ticks) */
 function vRecalc(s){
-  var p=s.p,P=D.prices,cd=(D.mode==='candles'),H=cd?D.highs:P,L=cd?D.lows:P,r,i;
+  vCalc(s,D.prices,D.highs,D.lows);
+  s.fa=s.a?s.a.slice():null; s.fb=s.b?s.b.slice():null;
+}
+function vCalc(s,P,H0,L0){
+  var p=s.p,cd=(D.mode==='candles'),H=cd?H0:P,L=cd?L0:P,r,i;
   if(s.kind==='ma'){
     s.a=(p.type==='ema')?vEMA(P,p.period):vSMA(P,p.period);
   }else if(s.kind==='sar'){
@@ -1656,6 +1660,25 @@ vm.addEventListener('keydown',function(e){
   e.stopPropagation();
   if(e.key==='Enter')okSet();else if(e.key==='Escape')closeSet();
 });
+/* ═════ REPLAY : indicateurs recalculés tick par tick sur la bougie en formation ═════ */
+function rpInd(k){
+  var P=D.prices.slice(0,k+1),H=D.highs.slice(0,k+1),L=D.lows.slice(0,k+1);
+  D.series.forEach(function(s){
+    if(!s.p||s.kind==='fractal')return;
+    if(!s.fa){s.fa=s.a.slice();s.fb=s.b?s.b.slice():null;}
+    var t={kind:s.kind,p:s.p};
+    vCalc(t,P,H,L);
+    s.a[k]=t.a[k];
+    if(s.b&&t.b)s.b[k]=t.b[k];
+  });
+}
+function rpIndRestore(k){
+  D.series.forEach(function(s){
+    if(!s.fa)return;
+    s.a[k]=s.fa[k];
+    if(s.b&&s.fb)s.b[k]=s.fb[k];
+  });
+}
 goEnd(220);
 fit();
 })();
