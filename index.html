@@ -1780,7 +1780,13 @@ const IND_TYPES = {
     ma:     {name:'Moyenne Mobile',     title:'Moyenne Mobile Settings',     logo:LOGOS.ma,      defaults:{period:20,type:'sma'},   fields:[['period','Period',1,2],['type','Type']]},
     fractal:{name:'Fractal',            title:'Fractal Settings',            logo:LOGOS.fractal, defaults:{period:2,mode:'std'},     fields:[['period','Neighbors',1,1],['mode','Mode']]}
 };
-const IND_MENU_ORDER = ['st','sar','ao','cel','ma','fractal'];
+const IND_MENU_ORDER = ['st','sar','ao','cel','ma','fractal','mbo'];
+IND_TYPES.mbo = {
+    name:'MBO DOM', title:'MBO DOM Settings',
+    logo:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 4h12v3H3zM3 9h18v3H3zM3 14h9v3H3zM3 19h15v2H3z' fill='%239aa3bd'/%3E%3C/svg%3E",
+    defaults:{rows:45, width:22, depth:1500},
+    fields:[['rows','Rows',1,10],['width','Width %',1,5],['depth','Ticks',1,50]]
+};
 const IND_COLORS = {
     sar:    ['#ffaa40','#fde047','#fb7185','#a3e635','#38bdf8'],
     ma:     ['#4dd0e1','#a78bfa','#fbbf24','#34d399','#f472b6'],
@@ -1789,8 +1795,8 @@ const IND_COLORS = {
     fractal:[['#00c896','#ff4d6a'],['#a3e635','#fb923c'],['#38bdf8','#e879f9']],
     ao:     [['rgba(0,200,150,.85)','rgba(255,77,106,.85)'],['rgba(56,189,248,.8)','rgba(251,146,60,.8)'],['rgba(163,230,53,.8)','rgba(232,121,249,.8)'],['rgba(250,204,21,.8)','rgba(167,139,250,.8)']]
 };
+IND_COLORS.mbo = [['rgba(0,200,150,.55)','rgba(255,77,106,.55)']];
 function indColor(type,v){ const a=IND_COLORS[type]; return a[v % a.length]; }
-
 /* ════════════════════════════════════════════
    DONNÉES PAR MARCHÉ — un tampon de ticks par symbole, mis à jour en direct
    pour tous les onglets ouverts (le changement d'onglet est donc instantané)
@@ -2923,6 +2929,56 @@ function extendYForOsc(scale){
     if(!(R > 0)) return;
     scale.min = scale.max - R/(1 - OSC_ZONE_FRACTION);
 }
+/* ═════ MBO DOM (proxy) : densité de ticks par niveau de prix, collée à l'axe de droite ═════ */
+function mboNiceStep(raw){
+    if(!(raw>0)) return 0.1;
+    const p=Math.pow(10,Math.floor(Math.log10(raw))), f=raw/p;
+    return Math.max(0.1,(f<1.5?1:f<3.5?2:f<7.5?5:10)*p);
+}
+const mboPlugin = {
+    id:'mboPlugin',
+    beforeDraw(c){
+        const insts=activeInds().filter(i=>i.type==='mbo' && !i.hidden);
+        if(!insts.length) return;
+        const ys=c.scales.y, ca=c.chartArea;
+        if(!ys || !ca || !(ys.max>ys.min)) return;
+        const P=ticksData.prices, n=P.length;
+        if(!n) return;
+        const cur=P[n-1], ctx=c.ctx;
+        insts.forEach(inst=>{
+            const p=inst.p;
+            const rows=Math.max(10,p.rows|0), depth=Math.max(50,p.depth|0);
+            const bs=mboNiceStep((ys.max-ys.min)/rows);
+            const from=Math.max(0,n-depth), cnt={};
+            let mx=0, mk=null;
+            for(let i=from;i<n;i++){
+                const k=Math.floor(P[i]/bs+1e-9);
+                const v=(cnt[k]||0)+1; cnt[k]=v;
+                if(v>mx){ mx=v; mk=k; }
+            }
+            const maxW=(ca.right-ca.left)*Math.max(5,p.width)/100;
+            const curK=Math.floor(cur/bs+1e-9);
+            ctx.save();
+            ctx.beginPath(); ctx.rect(ca.left,ca.top,ca.right-ca.left,ca.bottom-ca.top); ctx.clip();
+            ctx.font='700 9px "JetBrains Mono",monospace'; ctx.textBaseline='middle'; ctx.textAlign='right';
+            for(const key in cnt){
+                const k=+key, v=cnt[key];
+                const yT=ys.getPixelForValue((k+1)*bs), yB=ys.getPixelForValue(k*bs);
+                if(yB<ca.top || yT>ca.bottom) continue;
+                const h=Math.max(1,yB-yT-1), w=Math.max(1,v/mx*maxW), hot=(k===mk);
+                ctx.fillStyle = k>curK ? (hot?'rgba(255,77,106,.9)':'rgba(255,77,106,.55)')
+                              : k<curK ? (hot?'rgba(0,200,150,.9)':'rgba(0,200,150,.55)')
+                              : 'rgba(210,248,255,.65)';
+                ctx.fillRect(ca.right-w,yT+.5,w,h);
+                if(hot){
+                    ctx.fillStyle='#ffffff';
+                    ctx.fillText(String(v), ca.right-w-5, (yT+yB)/2);
+                }
+            }
+            ctx.restore();
+        });
+    }
+};
 /* Double-clic sur l'axe des prix : retour à l'échelle automatique */
 document.getElementById('y-drag-zone').addEventListener('dblclick',e=>{
     if(!chart) return;
@@ -2963,7 +3019,7 @@ function initChart(){
                 annotation:{ annotations:{} }
             }
         },
-        plugins:[smoothScrollPlugin, candlePlugin, smoothTipPlugin, tradeMarkPlugin, hLinePlugin]
+        plugins:[smoothScrollPlugin, mboPlugin, candlePlugin, smoothTipPlugin, tradeMarkPlugin, hLinePlugin]
     });
     const gradCtx=document.getElementById('cryptoChart').getContext('2d');
     const gradient=gradCtx.createLinearGradient(0,0,0,400);
@@ -3121,7 +3177,7 @@ function updateIndGaps(){
     const el=document.getElementById('ind-gaps');
     if(!el) return;
     const V=VD(), n=V.prices.length;
-    const inds=activeInds().filter(i=>!i.hidden && i.ds);
+    const inds=activeInds().filter(i=>!i.hidden && i.ds && i.type!=='mbo');
     let html='';
     if(chart && n && inds.length){
         const price=V.prices[n-1], ds=chart.data.datasets;
@@ -4254,7 +4310,7 @@ function exportTicksHTML(){
     const r = (v,d) => (v==null || isNaN(v)) ? null : +(+v).toFixed(d);
     const map = (arr,d) => { const o = new Array(n); for(let i=0;i<n;i++) o[i] = r(arr[i],d); return o; };
     const P = V.prices;
-    const inds = activeInds(), seen = {}, series = [], parts = [];
+    const inds = activeInds().filter(i=>i.type!=='mbo'), seen = {}, series = [], parts = [];
     inds.forEach(inst=>{
         const p=inst.p, total=inds.filter(x=>x.type===inst.type).length;
         seen[inst.type]=(seen[inst.type]||0)+1;
