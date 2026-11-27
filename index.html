@@ -2496,7 +2496,7 @@ async function switchTradingAccount(accountId){
     }catch(e){
         setTokStatus('❌ '+e.message,'var(--red)');
         showFeedback('❌ '+e.message,'err');
-        if(!tradeAuthorized) setBtnConnect('','🔐 Connexion Deriv');
+        if(!tradeAuthorized) setBtnConnect('','LOGIN TO DERIV');
     }
 }
 
@@ -2517,7 +2517,7 @@ async function connectDeriv(){
         await switchTradingAccount(pick.account_id);
     }catch(e){
         setTokStatus('❌ '+e.message,'var(--red)');
-        setBtnConnect('','🔐 Connexion Deriv');
+        setBtnConnect('','LOGIN TO DERIV');
         showFeedback('❌ '+e.message,'err');
     }
 }
@@ -2535,7 +2535,7 @@ function disconnectTrading(){
     try{localStorage.removeItem('access_token');localStorage.removeItem('is_logged');localStorage.removeItem('active_account_id');}catch(e){}
     sessionStorage.removeItem('oauth_state'); sessionStorage.removeItem('oauth_verifier');
     closeAcctMenu();
-    setBtnConnect('','🔐 Connexion Deriv');
+    setBtnConnect('','LOGIN TO DERIV');
     startPublicPolling();
 }
 
@@ -5377,7 +5377,7 @@ async function bootUnitie(){
                 window.history.replaceState({},document.title,REDIRECT_URI);
                 await connectDeriv();
             }catch(e){
-                setBtnConnect('','🔐 Connexion Deriv');
+                setBtnConnect('','LOGIN TO DERIV');
                 showFeedback('❌ '+e.message,'err');
                 window.history.replaceState({},document.title,REDIRECT_URI);
             }
@@ -5391,7 +5391,7 @@ async function bootUnitie(){
             catch(e){
                 /* Token expiré → nettoyer silencieusement */
                 localStorage.removeItem('access_token'); localStorage.removeItem('is_logged');
-                setBtnConnect('','🔐 Connexion Deriv');
+                setBtnConnect('','LOGIN TO DERIV');
                 showFeedback('Session expirée — reconnectez-vous','err');
             }
         }
