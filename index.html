@@ -2970,9 +2970,16 @@ const mboPlugin = {
                               : k<curK ? (hot?'rgba(0,200,150,.9)':'rgba(0,200,150,.55)')
                               : 'rgba(210,248,255,.65)';
                 ctx.fillRect(ca.right-w,yT+.5,w,h);
-                if(hot){
-                    ctx.fillStyle='#ffffff';
-                    ctx.fillText(String(v), ca.right-w-5, (yT+yB)/2);
+                                if(hot){
+                    const mid=(yT+yB)/2, bh=Math.max(14,h), xe=ca.right-maxW-8;
+                    if(xe>ca.left+30){
+                        ctx.fillStyle='rgba(214,150,30,.36)';
+                        ctx.fillRect(ca.left,mid-bh/2,xe-ca.left,bh);
+                        ctx.strokeStyle='rgba(214,150,30,.75)'; ctx.lineWidth=1;
+                        ctx.strokeRect(ca.left+.5,mid-bh/2+.5,xe-ca.left-1,bh-1);
+                        ctx.fillStyle='#ffffff';
+                        ctx.fillText(String(v), xe-8, mid);
+                    }
                 }
             }
             ctx.restore();
